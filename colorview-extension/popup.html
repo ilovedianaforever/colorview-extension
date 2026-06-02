@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ColorView - 色盲模拟与对比度检查器</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+
+<!-- Compact header -->
+<header class="cv-header">
+  <span class="cv-logo">&#128065;</span>
+  <div>
+    <h1>ColorView</h1>
+    <p>色盲模拟与对比度检查器</p>
+  </div>
+</header>
+
+<!-- Page simulation section -->
+<section class="cv-section" id="pageSimSection">
+  <div class="cv-section-title">
+    <span>&#127760;</span> 当前页面模拟
+  </div>
+  <p class="cv-hint">打开侧栏面板，截取当前页面用 Brettel 算法像素级模拟，或在原图上直接点击拾取颜色进行 WCAG 对比度检测</p>
+  <div class="cv-row">
+    <button id="startPageSimBtn" class="cv-btn cv-btn-primary">
+      &#128065; 打开 ColorView 侧栏面板
+    </button>
+    <button id="stopPageSimBtn" class="cv-btn cv-btn-danger" style="display:none">
+      &#10005; 关闭侧栏面板
+    </button>
+  </div>
+</section>
+
+<!-- Image upload section -->
+<section class="cv-section">
+  <div class="cv-section-title">
+    <span>&#128247;</span> 图片分析
+  </div>
+  <div class="cv-upload-area" id="uploadArea">
+    <span class="cv-upload-icon">&#128193;</span>
+    <p>拖拽图片到此处或点击上传</p>
+    <p class="cv-sub">PNG / JPG / WebP</p>
+    <input type="file" id="fileInput" accept="image/png,image/jpeg,image/webp" hidden>
+  </div>
+</section>
+
+<!-- CVD Type for image -->
+<section class="cv-section" id="imageCvdSection" style="display:none">
+  <div class="cv-section-title">
+    <span>&#127912;</span> 模拟类型
+  </div>
+  <div class="cv-type-grid" id="cvdSelector">
+    <button class="cv-type-btn active" data-type="deuteranopia">绿色盲<span>Deuteranopia</span></button>
+    <button class="cv-type-btn" data-type="protanopia">红色盲<span>Protanopia</span></button>
+    <button class="cv-type-btn" data-type="tritanopia">蓝色盲<span>Tritanopia</span></button>
+    <button class="cv-type-btn" data-type="deuteranomaly">绿色弱<span>Deuteranomaly</span></button>
+    <button class="cv-type-btn" data-type="protanomaly">红色弱<span>Protanomaly</span></button>
+    <button class="cv-type-btn" data-type="achromatopsia">全色盲<span>Achromatopsia</span></button>
+  </div>
+</section>
+
+<!-- Preview area -->
+<section class="cv-section" id="previewSection" style="display:none">
+  <div class="cv-section-title">
+    <span>&#128269;</span> 预览
+  </div>
+  <div class="cv-preview-grid">
+    <div class="cv-preview-box">
+      <div class="cv-preview-label"><span class="cv-dot cv-dot-original"></span> 原始</div>
+      <div class="cv-canvas-wrap">
+        <canvas id="originalCanvas"></canvas>
+        <div class="cv-empty" id="originalPlaceholder">原图将显示在此</div>
+      </div>
+    </div>
+    <div class="cv-preview-box">
+      <div class="cv-preview-label"><span class="cv-dot cv-dot-sim"></span> 模拟 - <span id="simTypeName">绿色盲</span></div>
+      <div class="cv-canvas-wrap">
+        <canvas id="simulatedCanvas"></canvas>
+        <div class="cv-empty" id="simPlaceholder">模拟效果将显示在此</div>
+      </div>
+    </div>
+  </div>
+  <div class="cv-image-info" id="imageInfo" style="display:none">
+    <span id="imageInfoText"></span>
+    <button id="removeImageBtn">移除</button>
+  </div>
+  <p class="cv-disclaimer">&#9432; 近似模拟 &mdash; 基于 Brettel et al. (1997) 算法</p>
+</section>
+
+<!-- Contrast checker (always visible but requires colors) -->
+<section class="cv-section">
+  <div class="cv-section-title">
+    <span>&#128200;</span> 对比度检测
+  </div>
+  <div class="cv-color-row">
+    <label>前景色</label>
+    <input type="color" id="fgColorPicker" value="#333333">
+    <input type="text" id="fgColorHex" value="#333333" maxlength="7">
+  </div>
+  <div class="cv-color-row">
+    <label>背景色</label>
+    <input type="color" id="bgColorPicker" value="#ffffff">
+    <input type="text" id="bgColorHex" value="#ffffff" maxlength="7">
+  </div>
+  <div class="cv-contrast-result">
+    <div class="cv-ratio-label">WCAG 对比度比率</div>
+    <div class="cv-ratio-value" id="contrastRatio">12.63<span>:1</span></div>
+    <div class="cv-wcag-grid">
+      <div class="cv-wcag-item">
+        <span class="cv-wcag-tier">AA</span>
+        <span class="cv-wcag-text">正常文本</span>
+        <span class="cv-wcag-badge cv-pass" id="aa-normal">&#10003; 通过</span>
+      </div>
+      <div class="cv-wcag-item">
+        <span class="cv-wcag-tier">AA</span>
+        <span class="cv-wcag-text">大文本</span>
+        <span class="cv-wcag-badge cv-pass" id="aa-large">&#10003; 通过</span>
+      </div>
+      <div class="cv-wcag-item">
+        <span class="cv-wcag-tier">AAA</span>
+        <span class="cv-wcag-text">正常文本</span>
+        <span class="cv-wcag-badge cv-pass" id="aaa-normal">&#10003; 通过</span>
+      </div>
+      <div class="cv-wcag-item">
+        <span class="cv-wcag-tier">AAA</span>
+        <span class="cv-wcag-text">大文本</span>
+        <span class="cv-wcag-badge cv-pass" id="aaa-large">&#10003; 通过</span>
+      </div>
+    </div>
+  </div>
+  <div class="cv-text-preview" id="textPreview">
+    <div class="cv-preview-lg">大文本示例 (18pt Bold)</div>
+    <div class="cv-preview-nm">正常文本示例 (14px Regular)</div>
+  </div>
+  <div class="cv-suggestions" id="suggestions">
+    <div class="cv-suggestion cv-spass">&#10003; 当前配色方案符合 WCAG 2.1 AA 级标准，文字内容对大多数用户具有良好的可读性。</div>
+  </div>
+</section>
+
+<footer class="cv-footer">
+  ColorView &mdash; Brettel et al. (1997) &amp; WCAG 2.1
+</footer>
+
+<script src="simulation-core.js"></script>
+<script src="popup.js"></script>
+</body>
+</html>

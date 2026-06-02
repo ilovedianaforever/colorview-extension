@@ -1,0 +1,57 @@
+{
+  "manifest_version": 3,
+  "name": "ColorView - 色盲模拟与对比度检查器",
+  "version": "1.0.0",
+  "description": "实时模拟多种色盲类型视觉效果，检查WCAG 2.1色彩对比度。让网页和图片对色觉缺陷用户更友好。",
+  "author": "ColorView Team",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "1627886536@QQ.com",
+      "strict_min_version": "140.0",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "ColorView - 色盲模拟与对比度检查器",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "permissions": [
+    "storage",
+    "activeTab",
+    "contextMenus",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "scripts": ["background.js"]
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["simulation-core.js"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "offline_enabled": true
+}

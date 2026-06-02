@@ -1,0 +1,1379 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ColorView - 色盲模拟与对比度检查器</title>
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-dark: #4338ca;
+            --primary-light: #e0e7ff;
+            --success: #16a34a;
+            --success-bg: #dcfce7;
+            --warning: #d97706;
+            --warning-bg: #fef3c7;
+            --danger: #dc2626;
+            --danger-bg: #fee2e2;
+            --bg: #f3f4f6;
+            --card: #ffffff;
+            --border: #e5e7eb;
+            --text: #1f2937;
+            --text-light: #6b7280;
+            --text-lighter: #9ca3af;
+            --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+            --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.08), 0 2px 4px -1px rgba(0,0,0,0.04);
+            --radius: 12px;
+            --radius-sm: 8px;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, var(--primary) 0%, #7c3aed 100%);
+            color: white;
+            padding: 18px 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 8px rgba(79,70,229,0.3);
+            position: relative;
+            z-index: 10;
+        }
+        .header-left { display: flex; align-items: center; gap: 16px; }
+        .header .logo {
+            width: 40px; height: 40px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 22px;
+        }
+        .header h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+        .header .subtitle { font-size: 13px; opacity: 0.85; margin-top: 1px; }
+        .header-badge {
+            background: rgba(255,255,255,0.15);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            backdrop-filter: blur(4px);
+        }
+
+        /* Main layout */
+        .main {
+            display: grid;
+            grid-template-columns: 280px 1fr 320px;
+            gap: 20px;
+            padding: 20px;
+            max-width: 1600px;
+            margin: 0 auto;
+            min-height: calc(100vh - 80px);
+        }
+
+        /* Cards */
+        .card {
+            background: var(--card);
+            border-radius: var(--radius);
+            padding: 20px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+        }
+        .card + .card { margin-top: 16px; }
+        .card-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .card-title .icon { font-size: 18px; }
+
+        /* Upload area */
+        .upload-area {
+            border: 2px dashed #d1d5db;
+            border-radius: var(--radius-sm);
+            padding: 36px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            background: #fafafa;
+            position: relative;
+        }
+        .upload-area:hover, .upload-area.dragover {
+            border-color: var(--primary);
+            background: var(--primary-light);
+        }
+        .upload-area.dragover { transform: scale(1.02); }
+        .upload-icon { font-size: 36px; margin-bottom: 8px; display: block; }
+        .upload-text { font-size: 14px; color: var(--text); font-weight: 500; }
+        .upload-subtext { font-size: 12px; color: var(--text-light); margin-top: 4px; }
+        .upload-area input[type="file"] { display: none; }
+
+        /* CVD type buttons */
+        .cvd-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .cvd-btn {
+            padding: 10px 8px;
+            border: 2px solid var(--border);
+            border-radius: var(--radius-sm);
+            background: white;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text);
+        }
+        .cvd-btn:hover { border-color: var(--primary); color: var(--primary); background: #fafafe; }
+        .cvd-btn.active {
+            border-color: var(--primary);
+            background: var(--primary);
+            color: white;
+        }
+        .cvd-btn .cvd-label { display: block; font-size: 11px; color: var(--text-light); margin-top: 2px; font-weight: 400; }
+        .cvd-btn.active .cvd-label { color: rgba(255,255,255,0.8); }
+
+        /* Preview area */
+        .preview-area { display: flex; flex-direction: column; gap: 16px; }
+        .preview-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+        .preview-box {
+            background: white;
+            border-radius: var(--radius);
+            padding: 16px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+        }
+        .preview-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .preview-label .dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .preview-label .dot.original { background: #10b981; }
+        .preview-label .dot.simulated { background: #f59e0b; }
+        .canvas-wrap {
+            position: relative;
+            flex: 1;
+            background: repeating-conic-gradient(#f3f4f6 0% 25%, #fff 0% 50%) 50%/16px 16px;
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+            min-height: 280px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #eee;
+        }
+        .canvas-wrap canvas {
+            max-width: 100%;
+            max-height: 480px;
+            display: none;
+            image-rendering: auto;
+        }
+        .canvas-wrap.sample-mode { cursor: crosshair; }
+        .canvas-wrap.sample-mode canvas { cursor: crosshair; }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-light);
+        }
+        .empty-state .empty-icon { font-size: 48px; margin-bottom: 12px; display: block; }
+        .empty-state p { font-size: 14px; }
+        .empty-state .hint { font-size: 12px; color: var(--text-lighter); margin-top: 8px; }
+
+        /* Color blocks (no-image mode) */
+        .color-block {
+            width: 100%;
+            min-height: 280px;
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 600;
+            color: white;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+            transition: background-color 0.3s;
+        }
+
+        /* Disclaimer */
+        .disclaimer {
+            font-size: 12px;
+            color: var(--text-light);
+            text-align: center;
+            padding: 10px 16px;
+            background: #f9fafb;
+            border-radius: var(--radius-sm);
+            border: 1px solid #f3f4f6;
+        }
+
+        /* Zoom lens */
+        .zoom-lens {
+            display: none;
+            position: fixed;
+            width: 128px;
+            height: 128px;
+            border: 3px solid white;
+            border-radius: 10px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+            pointer-events: none;
+            z-index: 100;
+            overflow: hidden;
+            image-rendering: pixelated;
+        }
+        .zoom-lens.visible { display: block; }
+        .zoom-lens canvas { width: 100%; height: 100%; image-rendering: pixelated; }
+        .zoom-crosshair {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 12px; height: 12px;
+            border: 2px solid rgba(255,255,255,0.9);
+            border-radius: 50%;
+            box-shadow: 0 0 3px rgba(0,0,0,0.4);
+        }
+        .zoom-color {
+            position: absolute;
+            bottom: -28px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.75);
+            color: white;
+            font-size: 11px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            white-space: nowrap;
+            font-family: 'SF Mono', 'Consolas', monospace;
+        }
+
+        /* Color pickers */
+        .color-input-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        .color-input-row label {
+            font-size: 13px;
+            min-width: 56px;
+            color: var(--text);
+            font-weight: 500;
+        }
+        .color-input-row input[type="color"] {
+            width: 36px; height: 36px;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            cursor: pointer;
+            padding: 2px;
+            background: white;
+        }
+        .color-input-row input[type="text"] {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            font-family: 'SF Mono', 'Consolas', 'Courier New', monospace;
+            transition: border-color 0.2s;
+        }
+        .color-input-row input[type="text"]:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(79,70,229,0.1);
+        }
+
+        /* Sample buttons */
+        .sample-row { display: flex; gap: 8px; margin-bottom: 14px; }
+        .sample-btn {
+            flex: 1;
+            padding: 9px 12px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            background: white;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+            text-align: center;
+            font-weight: 500;
+        }
+        .sample-btn:hover { border-color: var(--primary); color: var(--primary); }
+        .sample-btn.active {
+            border-color: var(--primary);
+            background: var(--primary-light);
+            color: var(--primary);
+        }
+        .sample-hint {
+            font-size: 12px;
+            color: var(--warning);
+            text-align: center;
+            padding: 8px;
+            background: var(--warning-bg);
+            border-radius: 6px;
+            margin-bottom: 12px;
+            display: none;
+        }
+        .sample-hint.visible { display: block; }
+
+        /* Contrast result */
+        .contrast-result {
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+        .contrast-ratio-display {
+            background: linear-gradient(135deg, #f8f9fa, #f1f3f5);
+            padding: 20px;
+            text-align: center;
+        }
+        .contrast-ratio-display .ratio-label {
+            font-size: 12px;
+            color: var(--text-light);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+        .contrast-ratio-display .ratio-value {
+            font-size: 42px;
+            font-weight: 800;
+            color: var(--text);
+            line-height: 1.1;
+            margin-top: 4px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+        .contrast-ratio-display .ratio-value span { font-size: 24px; font-weight: 600; }
+
+        /* WCAG grid */
+        .wcag-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+        }
+        .wcag-item {
+            padding: 14px 12px;
+            text-align: center;
+            border-top: 1px solid var(--border);
+            transition: background 0.2s;
+        }
+        .wcag-item:nth-child(odd) { border-right: 1px solid var(--border); }
+        .wcag-item .wcag-level { font-size: 11px; color: var(--text-light); font-weight: 500; }
+        .wcag-item .wcag-type { font-size: 12px; color: var(--text); font-weight: 600; margin: 2px 0 6px; }
+        .wcag-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 12px;
+            border-radius: 14px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .wcag-badge.pass { background: var(--success-bg); color: var(--success); }
+        .wcag-badge.fail { background: var(--danger-bg); color: var(--danger); }
+
+        /* Preview swatch */
+        .text-preview {
+            margin-top: 14px;
+            padding: 16px;
+            border-radius: var(--radius-sm);
+            text-align: center;
+            border: 1px solid var(--border);
+        }
+        .text-preview .preview-large { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+        .text-preview .preview-normal { font-size: 14px; }
+
+        /* Suggestions */
+        .suggestion {
+            padding: 12px 14px;
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            line-height: 1.6;
+            margin-bottom: 8px;
+        }
+        .suggestion:last-child { margin-bottom: 0; }
+        .suggestion.pass {
+            background: var(--success-bg);
+            color: #15803d;
+            border-left: 3px solid var(--success);
+        }
+        .suggestion.warn {
+            background: var(--warning-bg);
+            color: #92400e;
+            border-left: 3px solid var(--warning);
+        }
+        .suggestion strong { font-weight: 600; }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 20px;
+            font-size: 12px;
+            color: var(--text-lighter);
+        }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .main {
+                grid-template-columns: 1fr 1fr;
+            }
+            .main > .left-panel {
+                grid-column: 1 / -1;
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 16px;
+            }
+            .main > .left-panel .card { margin-top: 0; }
+        }
+        @media (max-width: 768px) {
+            .header { padding: 14px 16px; }
+            .header h1 { font-size: 18px; }
+            .header-badge { display: none; }
+            .main {
+                grid-template-columns: 1fr;
+                padding: 12px;
+                gap: 12px;
+            }
+            .main > .left-panel {
+                grid-template-columns: 1fr;
+            }
+            .preview-container { grid-template-columns: 1fr; }
+            .cvd-grid { grid-template-columns: 1fr 1fr 1fr; }
+        }
+
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in { animation: fadeIn 0.3s ease; }
+
+        /* Loading spinner */
+        .spinner {
+            width: 32px; height: 32px;
+            border: 3px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 12px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Image info bar */
+        .image-info {
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            background: #f9fafb;
+            border-radius: 6px;
+            font-size: 12px;
+            color: var(--text-light);
+            margin-top: 10px;
+        }
+        .image-info.visible { display: flex; }
+        .image-info button {
+            background: none;
+            border: none;
+            color: var(--danger);
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            padding: 2px 8px;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+        .image-info button:hover { background: var(--danger-bg); }
+    </style>
+</head>
+<body>
+
+<header class="header">
+    <div class="header-left">
+        <div class="logo">&#128065;</div>
+        <div>
+            <h1>ColorView</h1>
+            <div class="subtitle">色盲模拟与对比度检查器</div>
+        </div>
+    </div>
+    <div class="header-badge">WCAG 2.1 &middot; Brettel 1997</div>
+</header>
+
+<main class="main">
+    <!-- Left Panel: Input -->
+    <div class="left-panel">
+        <!-- Image Upload -->
+        <div class="card">
+            <div class="card-title"><span class="icon">&#128247;</span> 图片输入</div>
+            <div class="upload-area" id="uploadArea">
+                <span class="upload-icon">&#128193;</span>
+                <div class="upload-text">拖拽图片到此处，或点击上传</div>
+                <div class="upload-subtext">支持 PNG / JPG / WebP 格式</div>
+                <input type="file" id="fileInput" accept="image/png,image/jpeg,image/webp">
+            </div>
+            <div class="image-info" id="imageInfo">
+                <span id="imageInfoText"></span>
+                <button id="removeImageBtn">移除图片</button>
+            </div>
+        </div>
+
+        <!-- CVD Type Selection -->
+        <div class="card">
+            <div class="card-title"><span class="icon">&#127912;</span> 模拟类型</div>
+            <div class="cvd-grid" id="cvdSelector">
+                <button class="cvd-btn active" data-type="deuteranopia">
+                    绿色盲
+                    <span class="cvd-label">Deuteranopia</span>
+                </button>
+                <button class="cvd-btn" data-type="protanopia">
+                    红色盲
+                    <span class="cvd-label">Protanopia</span>
+                </button>
+                <button class="cvd-btn" data-type="tritanopia">
+                    蓝色盲
+                    <span class="cvd-label">Tritanopia</span>
+                </button>
+                <button class="cvd-btn" data-type="deuteranomaly">
+                    绿色弱
+                    <span class="cvd-label">Deuteranomaly</span>
+                </button>
+                <button class="cvd-btn" data-type="protanomaly">
+                    红色弱
+                    <span class="cvd-label">Protanomaly</span>
+                </button>
+                <button class="cvd-btn" data-type="achromatopsia">
+                    全色盲
+                    <span class="cvd-label">Achromatopsia</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Center Panel: Preview -->
+    <div class="preview-area">
+        <div class="preview-container">
+            <div class="preview-box">
+                <div class="preview-label">
+                    <span class="dot original"></span> 原始视图
+                </div>
+                <div class="canvas-wrap" id="originalWrap">
+                    <canvas id="originalCanvas"></canvas>
+                    <div class="empty-state" id="emptyState">
+                        <span class="empty-icon">&#127912;</span>
+                        <p>上传图片开始色盲模拟分析</p>
+                        <div class="hint">或在右侧面板直接选择颜色进行对比度检测</div>
+                    </div>
+                    <div class="color-block" id="originalColorBlock" style="display:none;"></div>
+                </div>
+            </div>
+            <div class="preview-box">
+                <div class="preview-label">
+                    <span class="dot simulated"></span>
+                    模拟视图 &mdash; <span id="simTypeName">绿色盲</span>
+                </div>
+                <div class="canvas-wrap" id="simulatedWrap">
+                    <canvas id="simulatedCanvas"></canvas>
+                    <div class="empty-state" id="simEmptyState">
+                        <span class="empty-icon">&#128064;</span>
+                        <p>模拟效果将在此显示</p>
+                    </div>
+                    <div class="color-block" id="simulatedColorBlock" style="display:none;"></div>
+                </div>
+            </div>
+        </div>
+        <div class="disclaimer">
+            &#9432;&#65039; 近似模拟 &mdash; 基于 Brettel et al. (1997) 算法，实际色觉体验因个体差异而不同
+        </div>
+    </div>
+
+    <!-- Right Panel: Contrast Checker -->
+    <div class="right-panel">
+        <!-- Color Selection -->
+        <div class="card">
+            <div class="card-title"><span class="icon">&#127912;</span> 颜色选择</div>
+            <div class="sample-row">
+                <button class="sample-btn" id="sampleFgBtn" title="从图片中采样前景色">&#128083; 采样前景色</button>
+                <button class="sample-btn" id="sampleBgBtn" title="从图片中采样背景色">&#128083; 采样背景色</button>
+            </div>
+            <div class="sample-hint" id="sampleHint">&#128072; 请点击左侧原图选取颜色</div>
+            <div class="color-input-row">
+                <label>前景色</label>
+                <input type="color" id="fgColorPicker" value="#333333">
+                <input type="text" id="fgColorHex" value="#333333" maxlength="7" placeholder="#000000">
+            </div>
+            <div class="color-input-row">
+                <label>背景色</label>
+                <input type="color" id="bgColorPicker" value="#ffffff">
+                <input type="text" id="bgColorHex" value="#ffffff" maxlength="7" placeholder="#ffffff">
+            </div>
+        </div>
+
+        <!-- Contrast Result -->
+        <div class="card">
+            <div class="card-title"><span class="icon">&#128200;</span> 对比度检测</div>
+            <div class="contrast-result">
+                <div class="contrast-ratio-display">
+                    <div class="ratio-label">WCAG 对比度比率</div>
+                    <div class="ratio-value" id="contrastRatio">12.63<span>:1</span></div>
+                </div>
+                <div class="wcag-grid">
+                    <div class="wcag-item">
+                        <div class="wcag-level">WCAG AA</div>
+                        <div class="wcag-type">正常文本</div>
+                        <span class="wcag-badge pass" id="aa-normal">&#10003; 通过</span>
+                    </div>
+                    <div class="wcag-item">
+                        <div class="wcag-level">WCAG AA</div>
+                        <div class="wcag-type">大文本</div>
+                        <span class="wcag-badge pass" id="aa-large">&#10003; 通过</span>
+                    </div>
+                    <div class="wcag-item">
+                        <div class="wcag-level">WCAG AAA</div>
+                        <div class="wcag-type">正常文本</div>
+                        <span class="wcag-badge pass" id="aaa-normal">&#10003; 通过</span>
+                    </div>
+                    <div class="wcag-item">
+                        <div class="wcag-level">WCAG AAA</div>
+                        <div class="wcag-type">大文本</div>
+                        <span class="wcag-badge pass" id="aaa-large">&#10003; 通过</span>
+                    </div>
+                </div>
+            </div>
+            <!-- Text preview -->
+            <div class="text-preview" id="textPreview">
+                <div class="preview-large">大文本示例 (18pt Bold)</div>
+                <div class="preview-normal">正常文本示例 (14px Regular)</div>
+            </div>
+        </div>
+
+        <!-- Suggestions -->
+        <div class="card">
+            <div class="card-title"><span class="icon">&#128161;</span> 建议</div>
+            <div id="suggestions">
+                <div class="suggestion pass">
+                    &#10003; 当前配色方案符合 WCAG 2.1 AA 级标准，文字内容对大多数用户具有良好的可读性。
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+
+<!-- Zoom lens -->
+<div class="zoom-lens" id="zoomLens">
+    <canvas id="zoomCanvas" width="128" height="128"></canvas>
+    <div class="zoom-crosshair"></div>
+    <div class="zoom-color" id="zoomColor"></div>
+</div>
+
+<footer class="footer">
+    ColorView &mdash; 基于 Brettel et al. (1997) 色盲模拟算法 &amp; WCAG 2.1 对比度标准 &mdash; 人机交互技术课程项目
+</footer>
+
+<script>
+// ================================================================
+// ColorView - Color Blind Simulator & Contrast Checker
+// Based on Brettel, Vienot & Mollon (1997) simulation algorithm
+// WCAG 2.1 contrast ratio calculation
+// ================================================================
+
+(function() {
+    'use strict';
+
+    // ==================== CVD Simulation Matrices ====================
+    // Pre-computed RGB-to-RGB simulation matrices using Brettel 1997 method:
+    //   RGB -> LMS (Hunt-Pointer-Estevez) -> Simulate -> LMS -> RGB
+    //
+    // HPE matrix (RGB -> LMS):
+    //   [ 0.4002, 0.7076, -0.0808 ]
+    //   [-0.2263, 1.1653,  0.0457 ]
+    //   [ 0.0000, 0.0000,  0.9182 ]
+    //
+    // Dichromacy simulation replaces missing cone response with
+    // a linear combination of remaining cones, using anchor wavelengths
+    // (475nm and 660nm) to determine the projection plane.
+    // Error is redistributed to the S channel.
+
+    const CVD_MATRICES = {
+        protanopia: [
+            [ 0.152286,  1.052583, -0.204868 ],
+            [ 0.114503,  0.786281,  0.099216 ],
+            [-0.003882, -0.048116,  1.051998 ]
+        ],
+        deuteranopia: [
+            [ 0.367322,  0.860646, -0.227968 ],
+            [ 0.280085,  0.672501,  0.047413 ],
+            [-0.011820, -0.084030,  1.095850 ]
+        ],
+        tritanopia: [
+            [ 1.255528, -0.076749, -0.178779 ],
+            [-0.078411,  0.930809,  0.147602 ],
+            [ 0.004733,  0.691367,  0.303900 ]
+        ]
+    };
+
+    // Severity levels for anomalous trichromacy
+    // Interpolate: result = (1-severity)*identity + severity*dichromacy_matrix
+    const ANOMALY_SEVERITY = {
+        protanomaly: 0.6,
+        deuteranomaly: 0.6
+    };
+
+    // Achromatopsia (total color blindness) - luminance-based grayscale
+    // Using Rec. 709 luma coefficients
+    const ACHROMATOPSIA_MATRIX = [
+        [ 0.2126, 0.7152, 0.0722 ],
+        [ 0.2126, 0.7152, 0.0722 ],
+        [ 0.2126, 0.7152, 0.0722 ]
+    ];
+
+    // CVD type display names
+    const CVD_NAMES = {
+        protanopia: '红色盲',
+        deuteranopia: '绿色盲',
+        tritanopia: '蓝色盲',
+        protanomaly: '红色弱',
+        deuteranomaly: '绿色弱',
+        achromatopsia: '全色盲'
+    };
+
+    // ==================== Color Conversion Utilities ====================
+
+    function hexToRgb(hex) {
+        hex = hex.replace(/^#/, '');
+        if (hex.length === 3) {
+            hex = hex[0]+hex[0] + hex[1]+hex[1] + hex[2]+hex[2];
+        }
+        const n = parseInt(hex, 16);
+        return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    }
+
+    function rgbToHex(r, g, b) {
+        return '#' + [r, g, b].map(v => {
+            const c = Math.max(0, Math.min(255, Math.round(v)));
+            return c.toString(16).padStart(2, '0');
+        }).join('');
+    }
+
+    // sRGB inverse gamma (normalized 0-1 input)
+    function srgbToLinear(c) {
+        return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    }
+
+    // sRGB forward gamma (normalized 0-1 input)
+    function linearToSrgb(c) {
+        c = Math.max(0, Math.min(1, c));
+        return c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1.0 / 2.4) - 0.055;
+    }
+
+    // Apply 3x3 matrix to [r, g, b]
+    function applyMatrix(m, r, g, b) {
+        return [
+            m[0][0]*r + m[0][1]*g + m[0][2]*b,
+            m[1][0]*r + m[1][1]*g + m[1][2]*b,
+            m[2][0]*r + m[2][1]*g + m[2][2]*b
+        ];
+    }
+
+    // Interpolate two 3x3 matrices
+    function lerpMatrix(a, b, t) {
+        const result = [];
+        for (let i = 0; i < 3; i++) {
+            result[i] = [];
+            for (let j = 0; j < 3; j++) {
+                result[i][j] = (1 - t) * a[i][j] + t * b[i][j];
+            }
+        }
+        return result;
+    }
+
+    const IDENTITY = [[1,0,0],[0,1,0],[0,0,1]];
+
+    // Get the simulation matrix for a given CVD type
+    function getSimMatrix(cvdType) {
+        if (cvdType === 'achromatopsia') return ACHROMATOPSIA_MATRIX;
+
+        if (CVD_MATRICES[cvdType]) return CVD_MATRICES[cvdType];
+
+        // Anomalous trichromacy: interpolate
+        const baseType = cvdType.replace('omaly', 'opia'); // protanomaly -> protanopia
+        const severity = ANOMALY_SEVERITY[cvdType] || 0.6;
+        if (CVD_MATRICES[baseType]) {
+            return lerpMatrix(IDENTITY, CVD_MATRICES[baseType], severity);
+        }
+
+        return IDENTITY;
+    }
+
+    // Simulate a single pixel's color through CVD
+    // Input: r, g, b in 0-255
+    // Output: [r, g, b] in 0-255
+    function simulatePixel(matrix, r, g, b) {
+        // Normalize to 0-1
+        let rn = r / 255, gn = g / 255, bn = b / 255;
+
+        // sRGB -> linear
+        rn = srgbToLinear(rn);
+        gn = srgbToLinear(gn);
+        bn = srgbToLinear(bn);
+
+        // Apply CVD simulation matrix (in linear space)
+        const [lr, lg, lb] = applyMatrix(matrix, rn, gn, bn);
+
+        // linear -> sRGB
+        const ro = linearToSrgb(lr);
+        const go = linearToSrgb(lg);
+        const bo = linearToSrgb(lb);
+
+        return [
+            Math.round(ro * 255),
+            Math.round(go * 255),
+            Math.round(bo * 255)
+        ];
+    }
+
+    // ==================== WCAG Contrast Calculation ====================
+
+    // Relative luminance per WCAG 2.1
+    // Input: r, g, b in 0-255
+    function relativeLuminance(r, g, b) {
+        const R = srgbToLinear(r / 255);
+        const G = srgbToLinear(g / 255);
+        const B = srgbToLinear(b / 255);
+        return 0.2126 * R + 0.7152 * G + 0.0722 * B;
+    }
+
+    // Contrast ratio per WCAG 2.1
+    function contrastRatio(rgb1, rgb2) {
+        const l1 = relativeLuminance(...rgb1);
+        const l2 = relativeLuminance(...rgb2);
+        const lighter = Math.max(l1, l2);
+        const darker = Math.min(l1, l2);
+        return (lighter + 0.05) / (darker + 0.05);
+    }
+
+    // ==================== Application State ====================
+
+    const state = {
+        image: null,             // HTMLImageElement
+        imageData: null,         // ImageData from original canvas
+        cvdType: 'deuteranopia', // current CVD type
+        fgColor: [51, 51, 51],   // foreground color RGB
+        bgColor: [255, 255, 255], // background color RGB
+        sampleMode: null,        // 'fg' or 'bg' or null
+        hasImage: false
+    };
+
+    // ==================== DOM References ====================
+
+    const $ = id => document.getElementById(id);
+
+    const dom = {
+        uploadArea: $('uploadArea'),
+        fileInput: $('fileInput'),
+        imageInfo: $('imageInfo'),
+        imageInfoText: $('imageInfoText'),
+        removeImageBtn: $('removeImageBtn'),
+        cvdSelector: $('cvdSelector'),
+        originalCanvas: $('originalCanvas'),
+        simulatedCanvas: $('simulatedCanvas'),
+        originalWrap: $('originalWrap'),
+        simulatedWrap: $('simulatedWrap'),
+        emptyState: $('emptyState'),
+        simEmptyState: $('simEmptyState'),
+        originalColorBlock: $('originalColorBlock'),
+        simulatedColorBlock: $('simulatedColorBlock'),
+        simTypeName: $('simTypeName'),
+        sampleFgBtn: $('sampleFgBtn'),
+        sampleBgBtn: $('sampleBgBtn'),
+        sampleHint: $('sampleHint'),
+        fgColorPicker: $('fgColorPicker'),
+        fgColorHex: $('fgColorHex'),
+        bgColorPicker: $('bgColorPicker'),
+        bgColorHex: $('bgColorHex'),
+        contrastRatio: $('contrastRatio'),
+        aaNormal: $('aa-normal'),
+        aaLarge: $('aa-large'),
+        aaaNormal: $('aaa-normal'),
+        aaaLarge: $('aaa-large'),
+        textPreview: $('textPreview'),
+        suggestions: $('suggestions'),
+        zoomLens: $('zoomLens'),
+        zoomCanvas: $('zoomCanvas'),
+        zoomColor: $('zoomColor')
+    };
+
+    const origCtx = dom.originalCanvas.getContext('2d', { willReadFrequently: true });
+    const simCtx = dom.simulatedCanvas.getContext('2d', { willReadFrequently: true });
+    const zoomCtx = dom.zoomCanvas.getContext('2d');
+
+    // ==================== Image Upload Handling ====================
+
+    function handleFile(file) {
+        if (!file || !file.type.startsWith('image/')) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                state.image = img;
+                state.hasImage = true;
+                drawOriginalImage();
+                applySimulation();
+                updateImageInfo(file.name, img.width, img.height);
+                dom.emptyState.style.display = 'none';
+                dom.simEmptyState.style.display = 'none';
+                dom.originalColorBlock.style.display = 'none';
+                dom.simulatedColorBlock.style.display = 'none';
+                dom.originalCanvas.style.display = 'block';
+                dom.simulatedCanvas.style.display = 'block';
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function drawOriginalImage() {
+        const img = state.image;
+        if (!img) return;
+
+        // Limit canvas size for performance
+        const maxDim = 800;
+        let w = img.width, h = img.height;
+        if (w > maxDim || h > maxDim) {
+            const scale = maxDim / Math.max(w, h);
+            w = Math.round(w * scale);
+            h = Math.round(h * scale);
+        }
+
+        dom.originalCanvas.width = w;
+        dom.originalCanvas.height = h;
+        origCtx.drawImage(img, 0, 0, w, h);
+        state.imageData = origCtx.getImageData(0, 0, w, h);
+
+        // Match simulated canvas size
+        dom.simulatedCanvas.width = w;
+        dom.simulatedCanvas.height = h;
+    }
+
+    function updateImageInfo(name, w, h) {
+        dom.imageInfoText.textContent = `${name} (${w}×${h})`;
+        dom.imageInfo.classList.add('visible');
+    }
+
+    function removeImage() {
+        state.image = null;
+        state.imageData = null;
+        state.hasImage = false;
+        dom.imageInfo.classList.remove('visible');
+        dom.emptyState.style.display = '';
+        dom.simEmptyState.style.display = '';
+        dom.originalCanvas.style.display = 'none';
+        dom.simulatedCanvas.style.display = 'none';
+        dom.originalColorBlock.style.display = 'none';
+        dom.simulatedColorBlock.style.display = 'none';
+        dom.fileInput.value = '';
+        updateColorBlocks();
+    }
+
+    // Drag and drop
+    dom.uploadArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dom.uploadArea.classList.add('dragover');
+    });
+    dom.uploadArea.addEventListener('dragleave', () => {
+        dom.uploadArea.classList.remove('dragover');
+    });
+    dom.uploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dom.uploadArea.classList.remove('dragover');
+        if (e.dataTransfer.files.length > 0) {
+            handleFile(e.dataTransfer.files[0]);
+        }
+    });
+    dom.uploadArea.addEventListener('click', () => dom.fileInput.click());
+    dom.fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) handleFile(e.target.files[0]);
+    });
+    dom.removeImageBtn.addEventListener('click', removeImage);
+
+    // ==================== CVD Simulation ====================
+
+    function applySimulation() {
+        if (!state.imageData) {
+            // If no image, simulate the color blocks
+            updateColorBlocks();
+            return;
+        }
+
+        const matrix = getSimMatrix(state.cvdType);
+        const src = state.imageData;
+        const dst = simCtx.createImageData(src.width, src.height);
+        const srcData = src.data;
+        const dstData = dst.data;
+
+        for (let i = 0; i < srcData.length; i += 4) {
+            const [sr, sg, sb] = simulatePixel(matrix, srcData[i], srcData[i+1], srcData[i+2]);
+            dstData[i]   = sr;
+            dstData[i+1] = sg;
+            dstData[i+2] = sb;
+            dstData[i+3] = srcData[i+3]; // preserve alpha
+        }
+
+        simCtx.putImageData(dst, 0, 0);
+        dom.simTypeName.textContent = CVD_NAMES[state.cvdType] || state.cvdType;
+    }
+
+    // CVD type selector
+    dom.cvdSelector.addEventListener('click', (e) => {
+        const btn = e.target.closest('.cvd-btn');
+        if (!btn) return;
+        dom.cvdSelector.querySelectorAll('.cvd-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.cvdType = btn.dataset.type;
+        applySimulation();
+
+        // Save preference
+        try { localStorage.setItem('colorview_cvd', state.cvdType); } catch(e) {}
+    });
+
+    // ==================== Color Block Mode (no image) ====================
+
+    function updateColorBlocks() {
+        if (state.hasImage) return;
+
+        const fgHex = rgbToHex(...state.fgColor);
+        const bgHex = rgbToHex(...state.bgColor);
+
+        // Show color blocks instead of canvases
+        dom.originalCanvas.style.display = 'none';
+        dom.simulatedCanvas.style.display = 'none';
+        dom.emptyState.style.display = 'none';
+        dom.simEmptyState.style.display = 'none';
+
+        // Original block: show background color with foreground text
+        dom.originalColorBlock.style.display = 'flex';
+        dom.originalColorBlock.style.background = bgHex;
+        dom.originalColorBlock.style.color = fgHex;
+        dom.originalColorBlock.innerHTML = `<div style="text-align:center"><div style="font-size:24px;font-weight:700;">Aa 文字预览</div><div style="font-size:14px;margin-top:4px;">前景 ${fgHex} / 背景 ${bgHex}</div></div>`;
+
+        // Simulated block: apply CVD to both colors
+        const matrix = getSimMatrix(state.cvdType);
+        const simFg = simulatePixel(matrix, ...state.fgColor);
+        const simBg = simulatePixel(matrix, ...state.bgColor);
+        const simFgHex = rgbToHex(...simFg);
+        const simBgHex = rgbToHex(...simBg);
+
+        dom.simulatedColorBlock.style.display = 'flex';
+        dom.simulatedColorBlock.style.background = simBgHex;
+        dom.simulatedColorBlock.style.color = simFgHex;
+        dom.simulatedColorBlock.innerHTML = `<div style="text-align:center"><div style="font-size:24px;font-weight:700;">Aa 模拟效果</div><div style="font-size:14px;margin-top:4px;">${simFgHex} / ${simBgHex}</div></div>`;
+
+        dom.simTypeName.textContent = CVD_NAMES[state.cvdType] || state.cvdType;
+    }
+
+    // ==================== Color Sampling from Image ====================
+
+    function setSampleMode(mode) {
+        if (state.sampleMode === mode) {
+            // Toggle off
+            state.sampleMode = null;
+            dom.sampleFgBtn.classList.remove('active');
+            dom.sampleBgBtn.classList.remove('active');
+            dom.sampleHint.classList.remove('visible');
+            dom.originalWrap.classList.remove('sample-mode');
+            dom.zoomLens.classList.remove('visible');
+            return;
+        }
+        state.sampleMode = mode;
+        dom.sampleFgBtn.classList.toggle('active', mode === 'fg');
+        dom.sampleBgBtn.classList.toggle('active', mode === 'bg');
+        dom.sampleHint.classList.add('visible');
+        dom.originalWrap.classList.add('sample-mode');
+    }
+
+    dom.sampleFgBtn.addEventListener('click', () => setSampleMode('fg'));
+    dom.sampleBgBtn.addEventListener('click', () => setSampleMode('bg'));
+
+    // Click on original canvas to sample color
+    dom.originalCanvas.addEventListener('click', (e) => {
+        if (!state.sampleMode || !state.imageData) return;
+
+        const rect = dom.originalCanvas.getBoundingClientRect();
+        const scaleX = dom.originalCanvas.width / rect.width;
+        const scaleY = dom.originalCanvas.height / rect.height;
+        const x = Math.floor((e.clientX - rect.left) * scaleX);
+        const y = Math.floor((e.clientY - rect.top) * scaleY);
+
+        if (x < 0 || y < 0 || x >= state.imageData.width || y >= state.imageData.height) return;
+
+        const idx = (y * state.imageData.width + x) * 4;
+        const r = state.imageData.data[idx];
+        const g = state.imageData.data[idx + 1];
+        const b = state.imageData.data[idx + 2];
+        const hex = rgbToHex(r, g, b);
+
+        if (state.sampleMode === 'fg') {
+            state.fgColor = [r, g, b];
+            dom.fgColorPicker.value = hex;
+            dom.fgColorHex.value = hex;
+        } else {
+            state.bgColor = [r, g, b];
+            dom.bgColorPicker.value = hex;
+            dom.bgColorHex.value = hex;
+        }
+
+        // Exit sample mode
+        setSampleMode(null);
+        updateContrast();
+        if (!state.hasImage) updateColorBlocks();
+    });
+
+    // Zoom lens on hover over original canvas
+    dom.originalCanvas.addEventListener('mousemove', (e) => {
+        if (!state.imageData) return;
+
+        const rect = dom.originalCanvas.getBoundingClientRect();
+        const scaleX = dom.originalCanvas.width / rect.width;
+        const scaleY = dom.originalCanvas.height / rect.height;
+        const x = Math.floor((e.clientX - rect.left) * scaleX);
+        const y = Math.floor((e.clientY - rect.top) * scaleY);
+
+        if (x < 0 || y < 0 || x >= state.imageData.width || y >= state.imageData.height) {
+            dom.zoomLens.classList.remove('visible');
+            return;
+        }
+
+        // Show zoom lens (keep within viewport)
+        let lensX = e.clientX + 20;
+        let lensY = e.clientY - 80;
+        if (lensX + 140 > window.innerWidth) lensX = e.clientX - 150;
+        if (lensY < 10) lensY = e.clientY + 20;
+        dom.zoomLens.classList.add('visible');
+        dom.zoomLens.style.left = lensX + 'px';
+        dom.zoomLens.style.top = lensY + 'px';
+
+        // Draw zoomed view (8x zoom, 16x16 pixel area -> 128x128)
+        const halfView = 8;
+        zoomCtx.imageSmoothingEnabled = false;
+        zoomCtx.clearRect(0, 0, 128, 128);
+        zoomCtx.drawImage(
+            dom.originalCanvas,
+            x - halfView, y - halfView, halfView * 2, halfView * 2,
+            0, 0, 128, 128
+        );
+
+        // Show color under cursor
+        const idx = (y * state.imageData.width + x) * 4;
+        const r = state.imageData.data[idx];
+        const g = state.imageData.data[idx + 1];
+        const b = state.imageData.data[idx + 2];
+        const hex = rgbToHex(r, g, b);
+        dom.zoomColor.textContent = hex;
+        dom.zoomColor.style.backgroundColor = hex;
+        dom.zoomColor.style.color = relativeLuminance(r, g, b) > 0.5 ? '#000' : '#fff';
+    });
+
+    dom.originalCanvas.addEventListener('mouseleave', () => {
+        dom.zoomLens.classList.remove('visible');
+    });
+
+    // ==================== Color Picker Sync ====================
+
+    function syncColorInputs(pickerEl, hexEl, stateKey) {
+        pickerEl.addEventListener('input', (e) => {
+            const hex = e.target.value;
+            hexEl.value = hex;
+            state[stateKey] = hexToRgb(hex);
+            updateContrast();
+            if (!state.hasImage) updateColorBlocks();
+        });
+        hexEl.addEventListener('input', (e) => {
+            let hex = e.target.value.trim();
+            if (!hex.startsWith('#')) hex = '#' + hex;
+            if (/^#[0-9a-fA-F]{6}$/.test(hex)) {
+                pickerEl.value = hex;
+                state[stateKey] = hexToRgb(hex);
+                updateContrast();
+                if (!state.hasImage) updateColorBlocks();
+            }
+        });
+        hexEl.addEventListener('blur', (e) => {
+            let hex = e.target.value.trim();
+            if (!hex.startsWith('#')) hex = '#' + hex;
+            if (/^#[0-9a-fA-F]{6}$/.test(hex)) {
+                e.target.value = hex;
+            } else {
+                e.target.value = rgbToHex(...state[stateKey]);
+            }
+        });
+    }
+
+    syncColorInputs(dom.fgColorPicker, dom.fgColorHex, 'fgColor');
+    syncColorInputs(dom.bgColorPicker, dom.bgColorHex, 'bgColor');
+
+    // ==================== Contrast Checker & Suggestions ====================
+
+    function updateWcagBadge(element, pass) {
+        element.className = 'wcag-badge ' + (pass ? 'pass' : 'fail');
+        element.innerHTML = pass ? '&#10003; 通过' : '&#10007; 未通过';
+    }
+
+    function updateContrast() {
+        const ratio = contrastRatio(state.fgColor, state.bgColor);
+        const ratioText = ratio.toFixed(2);
+        dom.contrastRatio.innerHTML = ratioText + '<span>:1</span>';
+
+        // WCAG thresholds
+        const aaNormal = ratio >= 4.5;
+        const aaLarge = ratio >= 3.0;
+        const aaaNormal = ratio >= 7.0;
+        const aaaLarge = ratio >= 4.5;
+
+        updateWcagBadge(dom.aaNormal, aaNormal);
+        updateWcagBadge(dom.aaLarge, aaLarge);
+        updateWcagBadge(dom.aaaNormal, aaaNormal);
+        updateWcagBadge(dom.aaaLarge, aaaLarge);
+
+        // Update text preview
+        const fgHex = rgbToHex(...state.fgColor);
+        const bgHex = rgbToHex(...state.bgColor);
+        dom.textPreview.style.background = bgHex;
+        dom.textPreview.style.color = fgHex;
+
+        // Generate suggestions
+        generateSuggestions(ratio, aaNormal, aaLarge, aaaNormal, aaaLarge);
+    }
+
+    function generateSuggestions(ratio, aaNormal, aaLarge, aaaNormal, aaaLarge) {
+        const suggestions = [];
+        const fgLum = relativeLuminance(...state.fgColor);
+        const bgLum = relativeLuminance(...state.bgColor);
+        const fgIsDarker = fgLum < bgLum;
+
+        if (aaNormal && aaaNormal) {
+            suggestions.push({
+                type: 'pass',
+                text: '&#10003; <strong>优秀！</strong>当前配色方案同时符合 WCAG 2.1 AA 级和 AAA 级标准（对比度 ' + ratio.toFixed(2) + ':1），文字内容对所有用户具有极佳的可读性。'
+            });
+        } else if (aaNormal) {
+            suggestions.push({
+                type: 'pass',
+                text: '&#10003; 当前配色符合 WCAG AA 级标准（对比度 ' + ratio.toFixed(2) + ':1），满足大多数场景的无障碍要求。'
+            });
+            if (!aaaNormal) {
+                suggestions.push({
+                    type: 'warn',
+                    text: '&#9888; <strong>未达到 AAA 级</strong>（需要 7:1 以上）。若用于正文文字，建议' +
+                        (fgIsDarker ? '将文字颜色进一步加深' : '将文字颜色进一步减淡') +
+                        '，或' + (fgIsDarker ? '将背景色减淡' : '将背景色加深') +
+                        '以达到更高标准。'
+                });
+            }
+        } else if (aaLarge) {
+            suggestions.push({
+                type: 'warn',
+                text: '&#9888; <strong>仅通过大文本 AA 级</strong>（对比度 ' + ratio.toFixed(2) + ':1，大文本需 ≥ 3:1）。' +
+                    '此配色仅适用于 18pt 以上或 14pt 加粗的大文本。'
+            });
+            suggestions.push({
+                type: 'warn',
+                text: '&#128736; <strong>改进建议：</strong>' +
+                    (fgIsDarker
+                        ? '将文字颜色加深（当前前景色较暗，可尝试更深的颜色）或将背景色减淡，使对比度达到 4.5:1 以上。'
+                        : '将文字颜色减淡（当前前景色较亮，可尝试更浅的颜色）或将背景色加深，使对比度达到 4.5:1 以上。')
+            });
+        } else {
+            suggestions.push({
+                type: 'warn',
+                text: '&#10060; <strong>未通过任何 WCAG 级别</strong>（对比度仅 ' + ratio.toFixed(2) + ':1）。' +
+                    '当前配色方案的文字在背景上难以辨认，对视力正常用户也可能造成阅读困难。'
+            });
+
+            // Calculate how much to adjust
+            const targetRatio = 4.5;
+            suggestions.push({
+                type: 'warn',
+                text: '&#128736; <strong>紧急改进：</strong>' +
+                    (fgIsDarker
+                        ? '建议将文字颜色显著加深，或将背景色显著减淡。至少需要将对比度提升至 4.5:1（当前差距 ' + (targetRatio - ratio).toFixed(2) + '）。'
+                        : '建议将文字颜色显著减淡，或将背景色显著加深。至少需要将对比度提升至 4.5:1（当前差距 ' + (targetRatio - ratio).toFixed(2) + '）。')
+            });
+            suggestions.push({
+                type: 'warn',
+                text: '&#128161; <strong>替代方案：</strong>如无法调整颜色，可将字号增大至 18pt（或 14pt 加粗）以上，此时仅需满足 3:1 的对比度要求。'
+            });
+        }
+
+        dom.suggestions.innerHTML = suggestions.map(s =>
+            `<div class="suggestion ${s.type}">${s.text}</div>`
+        ).join('');
+    }
+
+    // ==================== Initialization ====================
+
+    function init() {
+        // Load saved CVD preference
+        try {
+            const saved = localStorage.getItem('colorview_cvd');
+            if (saved && CVD_NAMES[saved]) {
+                state.cvdType = saved;
+                dom.cvdSelector.querySelectorAll('.cvd-btn').forEach(b => {
+                    b.classList.toggle('active', b.dataset.type === saved);
+                });
+            }
+        } catch(e) {}
+
+        // Initial contrast calculation
+        updateContrast();
+
+        // Show initial color blocks (no image mode)
+        updateColorBlocks();
+
+        // Prevent default drag behavior on the whole page
+        document.addEventListener('dragover', (e) => e.preventDefault());
+        document.addEventListener('drop', (e) => e.preventDefault());
+
+        // Keyboard shortcuts (1-6 for CVD types)
+        document.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT') return;
+            const types = ['protanopia', 'deuteranopia', 'tritanopia', 'protanomaly', 'deuteranomaly', 'achromatopsia'];
+            const idx = parseInt(e.key) - 1;
+            if (idx >= 0 && idx < types.length) {
+                state.cvdType = types[idx];
+                dom.cvdSelector.querySelectorAll('.cvd-btn').forEach(b => {
+                    b.classList.toggle('active', b.dataset.type === state.cvdType);
+                });
+                applySimulation();
+                try { localStorage.setItem('colorview_cvd', state.cvdType); } catch(e) {}
+            }
+        });
+    }
+
+    init();
+
+})();
+</script>
+
+</body>
+</html>
