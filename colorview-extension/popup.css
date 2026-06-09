@@ -331,3 +331,25 @@ body::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
   font-size: 10px;
   color: var(--cv-text-light);
 }
+
+/* Shortcut hint */
+.cv-shortcut-hint {
+  font-size: 10px;
+  color: #94a3b8;
+  text-align: center;
+  margin-top: 6px;
+}
+
+/* Toast */
+#popup-toast {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+/* HEX input error state */
+.cv-color-row input[type="text"].error {
+  border-color: var(--cv-danger);
+  animation: cvShake 0.4s ease;
+}
+@keyframes cvShake {
+  0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px)} 50%{transform:translateX(4px)} 75%{transform:translateX(-2px)}
+}
