@@ -25,6 +25,82 @@ let screenshotImg = null; // base64 screenshot data
 let panelEl = null;
 let floatBall = null;
 
+// --- Toast Notification (法则3+5: 统一反馈) ---
+let toastTimer = null;
+function showToast(message, type = 'info', duration = 3000) {
+  if (toastTimer) clearTimeout(toastTimer);
+  let el = document.getElementById('cv-toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'cv-toast';
+    el.style.cssText = `
+      position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:2147483647;
+      padding:10px 20px; border-radius:8px; font-size:13px; font-weight:500;
+      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'PingFang SC','Microsoft YaHei',sans-serif;
+      box-shadow:0 4px 16px rgba(0,0,0,0.15); pointer-events:none;
+      transition:opacity 0.3s,transform 0.3s; opacity:0; transform:translateX(-50%) translateY(-10px);
+    `;
+    document.body.appendChild(el);
+  }
+  const colors = {
+    success: { bg: '#dcfce7', border: '#16a34a', color: '#15803d', icon: '\u2713' },
+    error: { bg: '#fee2e2', border: '#dc2626', color: '#991b1b', icon: '\u2717' },
+    warning: { bg: '#fef3c7', border: '#d97706', color: '#92400e', icon: '\u26A0' },
+    info: { bg: '#e0e7ff', border: '#4f46e5', color: '#3730a3', icon: '\u2139' }
+  };
+  const c = colors[type] || colors.info;
+  el.style.cssText += `background:${c.bg};color:${c.color};border-left:4px solid ${c.border};opacity:1;transform:translateX(-50%) translateY(0);`;
+  el.textContent = `${c.icon} ${message}`;
+  toastTimer = setTimeout(() => {
+    el.style.opacity = '0';
+    el.style.transform = 'translateX(-50%) translateY(-10px)';
+  }, duration);
+}
+
+// --- Color history (法则6+8: 减少记忆负担) ---
+let colorHistory = [];
+const MAX_HISTORY = 5;
+function addToHistory(hex) {
+  colorHistory = [hex, ...colorHistory.filter(h => h !== hex)].slice(0, MAX_HISTORY);
+  renderHistory();
+}
+function renderHistory() {
+  const container = document.getElementById('cv-history-colors');
+  if (!container) return;
+  container.innerHTML = colorHistory.length === 0
+    ? '<span style="font-size:11px;color:#94a3b8">暂无取样记录，在预览图上点击即可取样</span>'
+    : colorHistory.map(h =>
+        `<button class="cv-history-chip" style="background:${h};width:28px;height:28px;border-radius:50%;border:2px solid #e2e8f0;cursor:pointer;position:relative" 
+          title="${h}" onclick="document.getElementById('cv-fg-picker').value='${h}';document.getElementById('cv-fg-hex').value='${h}';window._cvColors.fg=hexToRgb('${h}');updateContrast();updateSuggestions();showToast('已恢复颜色 '+h,'info',1500)">
+          <span style="position:absolute;bottom:-14px;left:50%;transform:translateX(-50%);font-size:9px;color:#64748b;white-space:nowrap">${h}</span>
+        </button>`
+      ).join('');
+}
+
+// --- Shortcut help panel (法则2: 快捷键) ---
+function toggleShortcutHelp() {
+  let el = document.getElementById('cv-shortcut-help');
+  if (el) { el.remove(); return; }
+  el = document.createElement('div');
+  el.id = 'cv-shortcut-help';
+  el.innerHTML = `
+    <div style="background:white;border-radius:12px;padding:20px;min-width:260px;box-shadow:0 8px 32px rgba(0,0,0,0.2)">
+      <div style="font-weight:700;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
+        \u2328 快捷键速查
+        <button onclick="this.parentElement.parentElement.parentElement.remove()" style="background:none;border:none;cursor:pointer;font-size:16px;color:#94a3b8">&times;</button>
+      </div>
+      <div style="display:grid;gap:8px;font-size:12px">
+        <div><kbd style="background:#f1f5f9;padding:2px 6px;border-radius:4px;font-family:monospace;font-weight:600">1-6</kbd> 切换六种CVD类型</div>
+        <div><kbd style="background:#f1f5f9;padding:2px 6px;border-radius:4px;font-family:monospace;font-weight:600">?</kbd> 显示/隐藏此面板</div>
+        <div><kbd style="background:#f1f5f9;padding:2px 6px;border-radius:4px;font-family:monospace;font-weight:600">Esc</kbd> 关闭侧栏面板</div>
+        <div><kbd style="background:#f1f5f9;padding:2px 6px;border-radius:4px;font-family:monospace;font-weight:600">R</kbd> 重置截图（截图模式）</div>
+      </div>
+    </div>`;
+  el.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:2147483647;';
+  document.body.appendChild(el);
+  el.addEventListener('click', (e) => { if (e.target === el) el.remove(); });
+}
+
 // --- SVG filter matrices (fast, approximate mode) ---
 const SVG_FILTERS = {
   protanopia: `<filter id="cv-protanopia"><feColorMatrix type="matrix" values="0.567 0.433 0 0 0 0.558 0.442 0 0 0 0 0.242 0.758 0 0 0 0 0 1 0"/></filter>`,
@@ -92,7 +168,21 @@ function createPanel() {
         <span style="font-size:20px">&#128065;</span>
         <div><div style="font-weight:700;font-size:15px">ColorView</div><div style="font-size:11px;opacity:.85">色盲模拟与对比度检查器</div></div>
       </div>
+      <button id="cv-shortcut-btn" title="快捷键速查 (?)" style="background:rgba(255,255,255,.15);border:none;color:white;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;margin-right:4px;font-weight:700">?</button>
       <button id="cv-panel-close" style="background:rgba(255,255,255,.15);border:none;color:white;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center">&#10005;</button>
+    </div>
+
+    <!-- Steps flow indicator (法则4: 设计对话以产生闭合感) -->
+    <div id="cv-steps" style="padding:8px 16px;background:#fff;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;font-size:10px;color:#64748b;overflow-x:auto;gap:4px">
+      <div class="cv-step"><span class="cv-step-num cv-step-done">&#10003;</span> 上传/截图</div>
+      <div style="color:#cbd5e1">&#9654;</div>
+      <div class="cv-step"><span class="cv-step-num cv-step-done">&#10003;</span> 选择类型</div>
+      <div style="color:#cbd5e1">&#9654;</div>
+      <div class="cv-step"><span class="cv-step-num">3</span> 查看模拟</div>
+      <div style="color:#cbd5e1">&#9654;</div>
+      <div class="cv-step"><span class="cv-step-num">4</span> 检测对比度</div>
+      <div style="color:#cbd5e1">&#9654;</div>
+      <div class="cv-step"><span class="cv-step-num">5</span> 获取建议</div>
     </div>
 
     <!-- Mode toggle -->
@@ -106,14 +196,16 @@ function createPanel() {
     <div style="padding:12px 16px;background:#fff;border-bottom:1px solid #e2e8f0">
       <div style="font-weight:600;font-size:13px;margin-bottom:8px">&#127912; 模拟类型</div>
       <div id="cv-cvd-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px"></div>
+      <div style="font-size:10px;color:#94a3b8;text-align:center;margin-top:6px">键盘快捷键 <kbd style="background:#f1f5f9;padding:1px 5px;border-radius:3px;font-family:monospace">1</kbd>–<kbd style="background:#f1f5f9;padding:1px 5px;border-radius:3px;font-family:monospace">6</kbd> 快速切换 · 按 <kbd style="background:#f1f5f9;padding:1px 5px;border-radius:3px;font-family:monospace">?</kbd> 查看所有快捷键</div>
     </div>
 
     <!-- Preview area -->
     <div style="padding:12px 16px;background:#fff;border-bottom:1px solid #e2e8f0;flex:1;min-height:0">
       <div style="font-weight:600;font-size:13px;margin-bottom:8px">&#128269; 预览对比</div>
       <div id="cv-screenshot-section">
-        <button id="cv-capture-btn" style="width:100%;padding:12px;background:#4f46e5;color:white;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;margin-bottom:10px">
-          &#128247; 截取当前页面并分析
+        <button id="cv-capture-btn" style="width:100%;padding:12px;background:#4f46e5;color:white;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;margin-bottom:10px;transition:all 0.2s">
+          <span id="cv-capture-btn-text">&#128247; 截取当前页面并分析</span>
+          <span id="cv-capture-btn-loading" style="display:none"><span class="cv-spinner"></span> 正在截取…</span>
         </button>
         <div id="cv-preview-status" style="text-align:center;color:#64748b;font-size:12px;padding:20px">
           点击上方按钮截取可见区域，使用 Brettel 1997 算法进行像素级模拟
@@ -181,6 +273,16 @@ function createPanel() {
         <div style="font-size:12px">正常文本示例 (14px Regular)</div>
       </div>
       <div id="cv-suggestions" style="margin-top:6px"></div>
+      <!-- Copy report button (法则4: 闭合感) -->
+      <button id="cv-copy-report" style="margin-top:6px;width:100%;padding:8px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;cursor:pointer;font-size:11px;color:#4f46e5;font-weight:500;transition:all 0.2s">&#128203; 复制检测报告</button>
+    </div>
+
+    <!-- Color history panel (法则6+8: 减少记忆负担 + 撤销) -->
+    <div style="padding:12px 16px;background:#fff;border-bottom:1px solid #e2e8f0">
+      <div style="font-weight:600;font-size:13px;margin-bottom:8px">&#128337; 颜色取样记录（最近5次）</div>
+      <div id="cv-history-colors" style="display:flex;gap:8px;flex-wrap:wrap;padding-bottom:18px;min-height:40px;align-items:flex-start">
+        <span style="font-size:11px;color:#94a3b8">暂无取样记录，在预览图上点击即可取样</span>
+      </div>
     </div>
 
     <div style="padding:10px;text-align:center;font-size:10px;color:#94a3b8">
@@ -192,22 +294,39 @@ function createPanel() {
 
   // --- Bind events ---
   document.getElementById('cv-panel-close').addEventListener('click', togglePanel);
+  document.getElementById('cv-shortcut-btn').addEventListener('click', toggleShortcutHelp);
   document.getElementById('cv-capture-btn').addEventListener('click', capturePage);
   document.getElementById('cv-mode-screenshot').addEventListener('click', () => switchMode('screenshot'));
   document.getElementById('cv-mode-filter').addEventListener('click', () => switchMode('filter'));
   document.getElementById('cv-apply-filter-btn').addEventListener('click', () => switchMode('screenshot'));
+  document.getElementById('cv-copy-report').addEventListener('click', copyContrastReport);
 
-  // CVD type buttons
+
+  // CVD type buttons with mini color bar preview (法则8: 减少记忆负担)
   const grid = document.getElementById('cv-cvd-grid');
+  // Mini color bars for preview: [red, green, blue, yellow]
+  const CVD_PREVIEW_COLORS = {
+    protanopia: ['#8B7355','#A0A050','#4169E1','#C8B820'],
+    deuteranopia: ['#937050','#A09048','#5090D0','#C8B840'],
+    tritanopia: ['#D04040','#40B0A0','#205080','#E06060'],
+    protanomaly: ['#C07060','#60A050','#4060C0','#D0A030'],
+    deuteranomaly: ['#C07060','#60A050','#4060C0','#D0A030'],
+    achromatopsia: ['#808080','#909090','#707070','#A0A0A0']
+  };
   CVD_TYPES.forEach(type => {
     const btn = document.createElement('button');
-    btn.textContent = CVD_NAMES[type];
     btn.dataset.type = type;
     btn.className = type === currentCvdType ? 'cv-cvd-btn active' : 'cv-cvd-btn';
+    const bars = (CVD_PREVIEW_COLORS[type]||['#ccc','#ccc','#ccc','#ccc'])
+      .map(c => `<span style="display:inline-block;width:12px;height:4px;background:${c};border-radius:1px"></span>`).join('');
+    btn.innerHTML = `<div style="font-size:12px;font-weight:500">${CVD_NAMES[type]}</div><div style="margin-top:3px;display:flex;gap:2px;justify-content:center">${bars}</div>`;
     btn.addEventListener('click', () => {
       currentCvdType = type;
       updateCvdButtons();
       document.getElementById('cv-sim-type-name').textContent = CVD_NAMES[type];
+      // Update step 2 indicator
+      markStepDone(2);
+      showToast(`已切换至 ${CVD_NAMES[type]} 模拟`, 'info', 1500);
       if (panelMode === 'filter') {
         applyFilter(currentCvdType);
       }
@@ -240,17 +359,24 @@ function createPanel() {
     if (window._cvSampleCount % 2 === 1) {
       document.getElementById('cv-fg-picker').value = hex;
       document.getElementById('cv-fg-hex').value = hex;
+      addToHistory(hex);
+      showToast(`已取样前景色 ${hex}（再次点击取样背景色）`, 'info', 2000);
     } else {
       document.getElementById('cv-bg-picker').value = hex;
       document.getElementById('cv-bg-hex').value = hex;
+      addToHistory(hex);
+      showToast(`已取样背景色 ${hex}`, 'success', 2000);
     }
     window._cvColors = window._cvColors || {};
     if (window._cvSampleCount % 2 === 1) {
       window._cvColors.fg = [pixel[0], pixel[1], pixel[2]];
     } else {
       window._cvColors.bg = [pixel[0], pixel[1], pixel[2]];
+      markStepDone(4); // Step 4: contrast detection done after both colors sampled
     }
     updateContrast();
+    updateSuggestions();
+    markStepDone(3); // Step 3: preview viewed
   });
 
   // Initial contrast
@@ -280,9 +406,16 @@ function switchMode(mode) {
 
 // --- Screenshot + Brettel simulation ---
 function capturePage() {
+  const btnText = document.getElementById('cv-capture-btn-text');
+  const btnLoading = document.getElementById('cv-capture-btn-loading');
+  const btn = document.getElementById('cv-capture-btn');
+  if (btn) { btnText.style.display = 'none'; btnLoading.style.display = 'inline'; btn.disabled = true; btn.style.opacity = '0.7'; }
   chrome.runtime.sendMessage({ action: 'captureVisibleTab' }, (dataUrl) => {
+    if (btn) { btnText.style.display = 'inline'; btnLoading.style.display = 'none'; btn.disabled = false; btn.style.opacity = '1'; }
     if (!dataUrl) {
-      document.getElementById('cv-preview-status').textContent = '截图失败，请重试';
+      document.getElementById('cv-preview-status').textContent = '\u2717 截图失败：请切换到普通网页后重试（无法截取系统页面或扩展页面）';
+      document.getElementById('cv-preview-status').style.color = '#dc2626';
+      showToast('截图失败：请切换到普通网页后重试', 'error', 3000);
       return;
     }
     screenshotImg = dataUrl;
@@ -303,6 +436,8 @@ function capturePage() {
       const origCtx = origCanvas.getContext('2d');
       origCtx.drawImage(img, 0, 0, w, h);
       applyBrettelSimulation();
+      markStepDone(1); // Step 1: screenshot done
+      showToast(`\u2713 截图完成（${img.width}\u00D7${img.height}），Brettel 1997 像素级模拟已应用`, 'success', 2500);
     };
     img.src = dataUrl;
   });
@@ -365,13 +500,55 @@ function updateCvdButtons() {
   });
 }
 
-// --- Color sync ---
+// --- Step flow indicator (法则4) ---
+const stepDone = {};
+function markStepDone(stepNum) {
+  if (stepDone[stepNum]) return;
+  stepDone[stepNum] = true;
+  const steps = document.querySelectorAll('#cv-steps .cv-step-num');
+  steps.forEach((el, i) => {
+    if (i + 1 <= stepNum) {
+      el.classList.add('cv-step-done');
+      el.textContent = '\u2713';
+    }
+  });
+  if (stepNum >= 5) {
+    showToast('\u2713 完整流程已完成！所有检测步骤均已执行', 'success', 3000);
+  }
+}
+
+// --- Copy contrast report (法则4) ---
+function copyContrastReport() {
+  const fg = window._cvColors.fg || [51, 51, 51];
+  const bg = window._cvColors.bg || [255, 255, 255];
+  const ratio = contrastRatio(fg, bg);
+  const aaN = ratio >= 4.5, aaL = ratio >= 3.0;
+  const aaaN = ratio >= 7.0, aaaL = ratio >= 4.5;
+  const fgHex = rgbToHex(...fg), bgHex = rgbToHex(...bg);
+  let verdict = '';
+  if (aaN && aaaN) verdict = '通过 WCAG 2.1 AA 和 AAA 全部四项检测';
+  else if (aaN) verdict = '通过 WCAG 2.1 AA 级检测（AAA 未完全通过）';
+  else if (aaL) verdict = '仅通过 AA 大文本检测，不满足 AA 正常文本标准';
+  else verdict = '未通过 WCAG 2.1 任何级别检测';
+  const report = `ColorView 检测报告\n================\n前景色: ${fgHex}\n背景色: ${bgHex}\n对比度: ${ratio.toFixed(2)}:1\n判定: ${verdict}\nCVD 模拟类型: ${CVD_NAMES[currentCvdType]}\n检测时间: ${new Date().toLocaleString()}`;
+  navigator.clipboard.writeText(report).then(() => {
+    showToast('\u2713 检测报告已复制到剪贴板', 'success', 2000);
+    const btn = document.getElementById('cv-copy-report');
+    if (btn) { btn.textContent = '\u2713 已复制！'; setTimeout(() => { btn.textContent = '\uD83D\uDCCB 复制检测报告'; }, 1500); }
+  }).catch(() => {
+    showToast('复制失败，请手动复制', 'error', 2000);
+  });
+  markStepDone(5);
+}
+
+// --- Color sync (with validation feedback per 法则5) ---
 function setupColorSync(pickerId, hexId, key) {
   const picker = document.getElementById(pickerId);
   const hex = document.getElementById(hexId);
   if (!picker || !hex) return;
   picker.addEventListener('input', () => {
     hex.value = picker.value;
+    hex.style.borderColor = '#e2e8f0';
     window._cvColors[key] = hexToRgb(picker.value);
     updateContrast();
     updateSuggestions();
@@ -381,9 +558,24 @@ function setupColorSync(pickerId, hexId, key) {
     if (!v.startsWith('#')) v = '#' + v;
     if (/^#[0-9a-fA-F]{6}$/.test(v)) {
       picker.value = v;
+      hex.style.borderColor = '#16a34a';
       window._cvColors[key] = hexToRgb(v);
       updateContrast();
       updateSuggestions();
+    } else if (v.length >= 3) {
+      hex.style.borderColor = '#dc2626';
+      hex.style.animation = 'cvShake 0.4s ease';
+      setTimeout(() => { hex.style.animation = ''; }, 400);
+    }
+  });
+  hex.addEventListener('blur', () => {
+    let v = hex.value.trim();
+    if (!v.startsWith('#')) v = '#' + v;
+    if (!/^#[0-9a-fA-F]{6}$/.test(v)) {
+      hex.style.borderColor = '#dc2626';
+      hex.value = rgbToHex(...(window._cvColors[key]||[51,51,51]));
+      showToast('请输入有效的6位十六进制色值（如 #FF5500）', 'error', 2500);
+      setTimeout(() => { hex.style.borderColor = '#e2e8f0'; }, 2500);
     }
   });
 }
@@ -501,6 +693,55 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 // --- Init ---
 createFloatBall();
 
+// --- Global keyboard shortcuts (法则2) ---
+document.addEventListener('keydown', (e) => {
+  // Don't intercept when user is typing in inputs
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+  
+  const key = e.key;
+  // CVD type switching (1-6)
+  if (key >= '1' && key <= '6') {
+    const idx = parseInt(key) - 1;
+    if (idx < CVD_TYPES.length) {
+      currentCvdType = CVD_TYPES[idx];
+      updateCvdButtons();
+      const nameEl = document.getElementById('cv-sim-type-name');
+      if (nameEl) nameEl.textContent = CVD_NAMES[currentCvdType];
+      if (panelMode === 'filter') applyFilter(currentCvdType);
+      if (panelMode === 'screenshot' && screenshotImg) applyBrettelSimulation();
+      markStepDone(2);
+      showToast(`已切换至 ${CVD_NAMES[currentCvdType]} [${key}]`, 'info', 1200);
+    }
+    return;
+  }
+  // Shortcut help
+  if (key === '?') {
+    e.preventDefault();
+    toggleShortcutHelp();
+    return;
+  }
+  // Close panel
+  if (key === 'Escape') {
+    if (panelVisible) {
+      togglePanel();
+      showToast('侧栏面板已关闭', 'info', 1000);
+    }
+    const help = document.getElementById('cv-shortcut-help');
+    if (help) help.remove();
+    return;
+  }
+  // Reset screenshot (R)
+  if (key === 'r' || key === 'R') {
+    if (panelVisible && panelMode === 'screenshot' && screenshotImg) {
+      screenshotImg = null;
+      document.getElementById('cv-preview-status').style.display = '';
+      document.getElementById('cv-preview-container').style.display = 'none';
+      window._cvSampleCount = 0;
+      showToast('截图已重置，可重新截取', 'info', 1500);
+    }
+  }
+});
+
 // Add styles
 const styleEl = document.createElement('style');
 styleEl.textContent = `
@@ -509,11 +750,25 @@ styleEl.textContent = `
 .cv-cvd-btn { padding:8px 4px; border:2px solid #e2e8f0; border-radius:8px; background:white; cursor:pointer; font-size:12px; font-weight:500; font-family:inherit; color:#1e293b; transition:all .2s; }
 .cv-cvd-btn:hover { border-color:#4f46e5; color:#4f46e5; }
 .cv-cvd-btn.active { border-color:#4f46e5; background:#4f46e5; color:white; }
+.cv-cvd-btn.active div { color:white; }
 .cv-badge { display:inline-block; padding:2px 10px; border-radius:10px; font-size:11px; font-weight:600; }
 .cv-badge.cv-pass { background:#dcfce7; color:#16a34a; }
 .cv-badge.cv-fail { background:#fee2e2; color:#dc2626; }
 #cv-original-canvas { cursor:crosshair; }
-/* Anomalous trichromacy filter approx */
+/* Step indicator (法则4) */
+.cv-step { display:flex; align-items:center; gap:3px; white-space:nowrap; }
+.cv-step-num { display:inline-flex; width:18px; height:18px; border-radius:50%; background:#e2e8f0; color:#64748b; font-size:9px; font-weight:700; align-items:center; justify-content:center; transition:all 0.3s; }
+.cv-step-num.cv-step-done { background:#16a34a; color:white; }
+/* Spinner (法则3) */
+.cv-spinner { display:inline-block; width:14px; height:14px; border:2px solid rgba(255,255,255,0.3); border-top-color:white; border-radius:50%; animation:cvSpin 0.6s linear infinite; vertical-align:middle; margin-right:4px; }
+@keyframes cvSpin { to { transform:rotate(360deg); } }
+/* Shake animation (法则5) */
+@keyframes cvShake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px)} 50%{transform:translateX(4px)} 75%{transform:translateX(-2px)} }
+/* History chip (法则6+8) */
+.cv-history-chip { transition:transform 0.2s; }
+.cv-history-chip:hover { transform:scale(1.15); border-color:#4f46e5 !important; }
+/* Copy button hover (法则4) */
+#cv-copy-report:hover { background:#e0e7ff !important; border-color:#4f46e5 !important; }
 `;
 document.head.appendChild(styleEl);
 console.log('[ColorView] Side panel + float ball ready. Right-click any image or click the floating ball to start.');
