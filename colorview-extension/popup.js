@@ -60,7 +60,10 @@ chrome.runtime.sendMessage({ action: 'getState' }, (data) => {
 // ==================== Image Upload ====================
 
 function handleFile(file) {
-  if (!file || !file.type.startsWith('image/')) return;
+  if (!file || !file.type.startsWith('image/')) {
+    showPopupToast('不支持的文件格式，请上传 PNG、JPG 或 WebP 图片', 'error');
+    return;
+  }
   const reader = new FileReader();
   reader.onload = (e) => {
     const img = new Image();
@@ -76,6 +79,10 @@ function handleFile(file) {
       dom.simPlaceholder.style.display = 'none';
       dom.originalCanvas.style.display = 'block';
       dom.simulatedCanvas.style.display = 'block';
+      showPopupToast('\u2713 图片加载成功（' + img.width + '\u00D7' + img.height + '）', 'success');
+    };
+    img.onerror = () => {
+      showPopupToast('图片加载失败，请检查文件是否完好', 'error');
     };
     img.src = e.target.result;
   };
@@ -106,6 +113,8 @@ function updateImageInfo(name, w, h) {
 }
 
 function removeImage() {
+  // Confirm dialog (法则6: 允许撤销)
+  if (!confirm('确定要移除当前图片吗？此操作不可恢复。')) return;
   state.image = null;
   state.imageData = null;
   state.hasImage = false;
@@ -117,6 +126,34 @@ function removeImage() {
   dom.originalCanvas.style.display = 'none';
   dom.simulatedCanvas.style.display = 'none';
   dom.fileInput.value = '';
+  showPopupToast('图片已移除，可上传新图片继续分析', 'info');
+}
+
+// --- Popup Toast (法则3+5: 统一反馈) ---
+let popupToastTimer = null;
+function showPopupToast(message, type = 'info', duration = 2500) {
+  if (popupToastTimer) clearTimeout(popupToastTimer);
+  let el = document.getElementById('popup-toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'popup-toast';
+    el.style.cssText = `
+      position:fixed; bottom:20px; left:50%; transform:translateX(-50%); z-index:9999;
+      padding:8px 16px; border-radius:8px; font-size:12px; font-weight:500;
+      box-shadow:0 4px 16px rgba(0,0,0,0.15); pointer-events:none;
+      transition:opacity 0.3s; opacity:0; white-space:nowrap;
+    `;
+    document.body.appendChild(el);
+  }
+  const colors = {
+    success: { bg: '#dcfce7', color: '#15803d' },
+    error: { bg: '#fee2e2', color: '#991b1b' },
+    info: { bg: '#e0e7ff', color: '#3730a3' }
+  };
+  const c = colors[type] || colors.info;
+  el.style.cssText += `background:${c.bg};color:${c.color};opacity:1;`;
+  el.textContent = message;
+  popupToastTimer = setTimeout(() => { el.style.opacity = '0'; }, duration);
 }
 
 dom.uploadArea.addEventListener('click', () => dom.fileInput.click());
@@ -160,6 +197,7 @@ function applySim() {
 function syncColor(picker, hexInput, key) {
   picker.addEventListener('input', () => {
     hexInput.value = picker.value;
+    hexInput.style.borderColor = 'var(--cv-border)';
     state[key] = hexToRgb(picker.value);
     updateContrast();
   });
@@ -167,16 +205,22 @@ function syncColor(picker, hexInput, key) {
     let val = hexInput.value.trim();
     if (!val.startsWith('#')) val = '#' + val;
     if (/^#[0-9a-fA-F]{6}$/.test(val)) {
+      hexInput.style.borderColor = '#16a34a';
       picker.value = val;
       state[key] = hexToRgb(val);
       updateContrast();
+    } else if (val.length >= 3) {
+      hexInput.style.borderColor = '#dc2626';
     }
   });
   hexInput.addEventListener('blur', () => {
     let val = hexInput.value.trim();
     if (!val.startsWith('#')) val = '#' + val;
     if (!/^#[0-9a-fA-F]{6}$/.test(val)) {
+      hexInput.style.borderColor = '#dc2626';
       hexInput.value = rgbToHex(...state[key]);
+      showPopupToast('请输入有效的6位十六进制色值（如 #FF5500）', 'error');
+      setTimeout(() => { hexInput.style.borderColor = 'var(--cv-border)'; }, 2500);
     }
   });
 }
